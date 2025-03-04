@@ -1,0 +1,39 @@
+.stButton > button {
+    width: 100%;
+    border-radius: 20px;
+    background-color: #FF6B6B;
+    color: white;
+    font-weight: bold;
+    border: none;
+    padding: 10px 20px;
+    margin: 10px 0;
+}
+
+.chat-message {
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.user-message {
+    background-color: #F0F2F6;
+    align-self: flex-end;
+}
+
+.bot-message {
+    background-color: #FF6B6B15;
+    align-self: flex-start;
+}
+
+.sidebar-content {
+    padding: 1rem;
+}
+
+.event-highlight {
+    background-color: #FF6B6B10;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
