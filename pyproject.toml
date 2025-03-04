@@ -9,4 +9,5 @@ dependencies = [
     "pypdf2>=3.0.1",
     "sentence-transformers>=3.4.1",
     "streamlit>=1.42.2",
+    "trafilatura>=2.0.0",
 ]

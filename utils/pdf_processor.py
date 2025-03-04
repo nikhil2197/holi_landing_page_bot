@@ -8,11 +8,12 @@ class PDFProcessor:
         self.pdf_path = pdf_path
         self.content = None
         self.sections = {}
+        self.overview = {}
         self.is_loaded = False
 
     def load_pdf(self) -> bool:
         """
-        Loads and processes the PDF file with improved section detection.
+        Loads and processes the PDF file with improved overview and section detection.
         """
         try:
             if not os.path.exists(self.pdf_path):
@@ -27,6 +28,8 @@ class PDFProcessor:
             full_text = "\n".join(text_content)
             self.content = full_text
 
+            # Extract essential information first
+            self._extract_overview(full_text)
             # Extract sections
             self._extract_sections(full_text)
             self.is_loaded = True
@@ -35,6 +38,42 @@ class PDFProcessor:
         except Exception as e:
             print(f"Error loading PDF: {str(e)}")
             return False
+
+    def _extract_overview(self, text: str) -> None:
+        """
+        Extracts essential event information from the text.
+        """
+        # Extract date and time
+        date_pattern = r"(?:Date|When):?\s*([^\n]+)"
+        time_pattern = r"(?:Time):?\s*([^\n]+)"
+        location_pattern = r"(?:Location|Venue|Where):?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\n|\n(?:[A-Z]|\d))"
+        organizer_pattern = r"(?:Organizer|Host|Organized by):?\s*([^\n]+)"
+        contact_pattern = r"(?:Contact|For inquiries):?\s*([^\n]+)"
+
+        # Extract key information
+        date_match = re.search(date_pattern, text, re.IGNORECASE)
+        time_match = re.search(time_pattern, text, re.IGNORECASE)
+        location_match = re.search(location_pattern, text, re.IGNORECASE)
+        organizer_match = re.search(organizer_pattern, text, re.IGNORECASE)
+        contact_match = re.search(contact_pattern, text, re.IGNORECASE)
+
+        # Store matches in overview
+        if date_match:
+            self.overview['date'] = date_match.group(1).strip()
+        if time_match:
+            self.overview['time'] = time_match.group(1).strip()
+        if location_match:
+            self.overview['location'] = location_match.group(1).strip()
+        if organizer_match:
+            self.overview['organizer'] = organizer_match.group(1).strip()
+        if contact_match:
+            self.overview['contact'] = contact_match.group(1).strip()
+
+        # Extract brief description (first few paragraphs)
+        description_pattern = r"^(?!.*(?:FAQ|Schedule|Price|Contact))(.+?)(?=\n\n[A-Z])"
+        description_match = re.search(description_pattern, text, re.DOTALL)
+        if description_match:
+            self.overview['description'] = description_match.group(1).strip()
 
     def _extract_sections(self, text: str) -> None:
         """
@@ -52,11 +91,11 @@ class PDFProcessor:
         if session_match:
             self.sections['session_details'] = session_match.group(0)
 
-        # Extract Location/Venue Information
-        location_pattern = r"(?:Location|Venue|Address).*?(?=\n\n[A-Z]|$)"
+        # Extract Location Information
+        location_pattern = r"(?:Location Details|Venue Information|Getting There).*?(?=\n\n[A-Z]|$)"
         location_match = re.search(location_pattern, text, re.DOTALL | re.IGNORECASE)
         if location_match:
-            self.sections['location'] = location_match.group(0)
+            self.sections['location_details'] = location_match.group(0)
 
         # Extract Pricing Information
         pricing_pattern = r"(?:Pricing|Ticket|Cost|Price).*?(?=\n\n[A-Z]|$)"
@@ -66,14 +105,22 @@ class PDFProcessor:
 
     def get_chunks(self, chunk_size: int = 1000) -> List[str]:
         """
-        Creates semantically meaningful chunks preserving section context.
+        Creates semantically meaningful chunks with overview priority.
         """
         if not self.is_loaded or not self.content:
             return []
 
         chunks = []
 
-        # First add section-specific chunks
+        # Add overview information first
+        if self.overview:
+            overview_chunk = "[OVERVIEW]\n"
+            for key, value in self.overview.items():
+                if value:
+                    overview_chunk += f"{key.title()}: {value}\n"
+            chunks.append(overview_chunk.strip())
+
+        # Add section-specific chunks
         for section_name, section_content in self.sections.items():
             if section_content:
                 # Add section identifier at the start
@@ -94,25 +141,6 @@ class PDFProcessor:
                 else:
                     chunks.append(section_chunk)
 
-        # Add remaining content
-        remaining_text = self.content
-        for section_content in self.sections.values():
-            if section_content:
-                remaining_text = remaining_text.replace(section_content, '')
-
-        # Process remaining text
-        current_chunk = ""
-        for paragraph in remaining_text.split("\n\n"):
-            if len(current_chunk) + len(paragraph) <= chunk_size:
-                current_chunk += paragraph + "\n\n"
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = paragraph + "\n\n"
-
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-
         return chunks
 
     def get_section(self, section_name: str) -> Optional[str]:
@@ -120,6 +148,12 @@ class PDFProcessor:
         Returns content of a specific section if available.
         """
         return self.sections.get(section_name)
+
+    def get_overview(self) -> Dict[str, str]:
+        """
+        Returns the extracted overview information.
+        """
+        return self.overview
 
     def get_content(self) -> Optional[str]:
         """

@@ -10,9 +10,10 @@ class VectorStore:
         self.chunks = []
         self.dimension = 384  # Default dimension for the specified model
         self.section_weights = {
+            'OVERVIEW': 1.3,  # Prioritize overview information
             'FAQS': 1.2,
             'SESSION_DETAILS': 1.2,
-            'LOCATION': 1.1,
+            'LOCATION_DETAILS': 1.1,
             'PRICING': 1.1
         }
 
@@ -67,18 +68,27 @@ class VectorStore:
 
     def get_relevant_context(self, query: str, max_tokens: int = 1500) -> Optional[str]:
         """
-        Returns concatenated relevant contexts with section awareness.
+        Returns concatenated relevant contexts with overview priority.
         """
         if not self.index:
             return None
 
         results = self.search(query)
 
-        # Group results by section
+        # Always include overview if it exists
+        overview_chunk = next(
+            (chunk for chunk, _ in results if "[OVERVIEW]" in chunk),
+            None
+        )
+
+        # Group other results by section
         sections: Dict[str, List[str]] = {}
         other_chunks: List[str] = []
 
         for chunk, _ in results:
+            if chunk == overview_chunk:
+                continue
+
             is_section = False
             for section in self.section_weights.keys():
                 if f"[{section}]" in chunk:
@@ -91,8 +101,12 @@ class VectorStore:
             if not is_section:
                 other_chunks.append(chunk)
 
-        # Combine contexts with section headers
+        # Combine contexts with overview first
         context_parts = []
+        if overview_chunk:
+            context_parts.append(overview_chunk)
+
+        # Add section-specific content
         for section_name, chunks in sections.items():
             if chunks:
                 context_parts.append(f"\n=== {section_name.upper()} ===\n")
