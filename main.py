@@ -76,21 +76,19 @@ def main():
     
     # Display welcome message if no messages yet
     if not st.session_state.messages:
-        with st.chat_message("assistant"):
-            welcome_message = """
-            Hi! I'm Alfred, your Holi Playdate Assistant. I'm here to help you learn more about the Holi Playdate event at Openhouse.
-            
-            You can ask me questions like:
-            - 🎨 What activities will be happening?
-            - 📍 Where is the event located?
-            - 💰 How much does it cost?
-            - 🕒 What are the timings?
-            - 👪 Is it suitable for all ages?
-            
-            Feel free to ask anything about the event, and I'll do my best to help!
-            """
-            st.markdown(welcome_message)
-            st.session_state.messages.append({"role": "assistant", "content": welcome_message})
+        welcome_message = """
+        Hi! I'm Alfred, your Holi Playdate Assistant. I'm here to help you learn more about the Holi Playdate event at Openhouse.
+        
+        You can ask me questions like:
+        - 🎨 What activities will be happening?
+        - 📍 Where is the event located?
+        - 💰 How much does it cost?
+        - 🕒 What are the timings?
+        - 👪 Is it suitable for all ages?
+        
+        Feel free to ask anything about the event, and I'll do my best to help!
+        """
+        st.session_state.messages.append({"role": "assistant", "content": welcome_message})
     
     # Initialize chat helper
     chat_helper = ChatHelper()
