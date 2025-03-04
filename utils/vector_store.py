@@ -9,17 +9,10 @@ class VectorStore:
         self.index = None
         self.chunks = []
         self.dimension = 384  # Default dimension for the specified model
-        self.section_weights = {
-            'OVERVIEW': 1.3,  # Prioritize overview information
-            'FAQS': 1.2,
-            'SESSION_DETAILS': 1.2,
-            'LOCATION_DETAILS': 1.1,
-            'PRICING': 1.1
-        }
 
     def create_index(self, text_chunks: List[str]) -> None:
         """
-        Creates a FAISS index from the provided text chunks with section awareness.
+        Creates a FAISS index from the provided text chunks.
         """
         self.chunks = text_chunks
         embeddings = self.encoder.encode(text_chunks)
@@ -30,7 +23,7 @@ class VectorStore:
 
     def search(self, query: str, k: int = 3) -> List[Tuple[str, float]]:
         """
-        Searches the vector store for relevant chunks with section-aware scoring.
+        Searches the vector store for relevant chunks.
         """
         if not self.index or not self.chunks:
             return []
@@ -38,83 +31,44 @@ class VectorStore:
         # Encode the query
         query_vector = self.encoder.encode([query])
 
-        # Get more results initially for reranking
-        initial_k = min(k * 2, len(self.chunks))
+        # Get more results for better context coverage
+        k = min(k + 2, len(self.chunks))
         distances, indices = self.index.search(
-            np.array(query_vector).astype('float32'), initial_k
+            np.array(query_vector).astype('float32'), k
         )
 
-        # Apply section weights and rerank results
-        weighted_results = []
+        # Return results with distances
+        results = []
         for idx, distance in zip(indices[0], distances[0]):
-            if idx >= len(self.chunks):
-                continue
+            if idx < len(self.chunks):
+                results.append((self.chunks[idx], float(distance)))
 
-            chunk = self.chunks[idx]
-            weight = 1.0
+        return results
 
-            # Apply section weights if chunk is from a specific section
-            for section, section_weight in self.section_weights.items():
-                if f"[{section}]" in chunk:
-                    weight = section_weight
-                    break
-
-            weighted_distance = distance / weight
-            weighted_results.append((chunk, weighted_distance))
-
-        # Sort by weighted distance and return top k
-        weighted_results.sort(key=lambda x: x[1])
-        return weighted_results[:k]
-
-    def get_relevant_context(self, query: str, max_tokens: int = 1500) -> Optional[str]:
+    def get_relevant_context(self, query: str, max_tokens: int = 2000) -> Optional[str]:
         """
-        Returns concatenated relevant contexts with overview priority.
+        Returns concatenated relevant contexts.
         """
         if not self.index:
             return None
 
         results = self.search(query)
 
-        # Always include overview if it exists
-        overview_chunk = next(
-            (chunk for chunk, _ in results if "[OVERVIEW]" in chunk),
-            None
-        )
-
-        # Group other results by section
-        sections: Dict[str, List[str]] = {}
-        other_chunks: List[str] = []
+        # Prioritize overview if it exists in results
+        overview_chunk = None
+        regular_chunks = []
 
         for chunk, _ in results:
-            if chunk == overview_chunk:
-                continue
-
-            is_section = False
-            for section in self.section_weights.keys():
-                if f"[{section}]" in chunk:
-                    section_name = section.lower()
-                    if section_name not in sections:
-                        sections[section_name] = []
-                    sections[section_name].append(chunk)
-                    is_section = True
-                    break
-            if not is_section:
-                other_chunks.append(chunk)
+            if "[OVERVIEW]" in chunk:
+                overview_chunk = chunk
+            else:
+                regular_chunks.append(chunk)
 
         # Combine contexts with overview first
         context_parts = []
         if overview_chunk:
             context_parts.append(overview_chunk)
-
-        # Add section-specific content
-        for section_name, chunks in sections.items():
-            if chunks:
-                context_parts.append(f"\n=== {section_name.upper()} ===\n")
-                context_parts.extend(chunks)
-
-        # Add other relevant chunks
-        if other_chunks:
-            context_parts.extend(other_chunks)
+        context_parts.extend(regular_chunks)
 
         context = "\n\n".join(context_parts)
 
